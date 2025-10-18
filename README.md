@@ -19,10 +19,6 @@ https://roegnejj.github.io/catechism-translation-tool/
 For questions or to submit completed translations, contact:
 **Jeremy Roegner** - jeremy.roegner@cph.org
 
-## Preview
-
-See the final product at [catechism.cph.org](https://catechism.cph.org)
-
 ---
 
 © 2025 Concordia Publishing House. All rights reserved.
