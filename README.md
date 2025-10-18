@@ -25,4 +25,4 @@ See the final product at [catechism.cph.org](https://catechism.cph.org)
 
 ---
 
-© 1986 Concordia Publishing House. All rights reserved.
+© 2025 Concordia Publishing House. All rights reserved.
