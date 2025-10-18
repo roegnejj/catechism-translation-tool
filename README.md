@@ -4,9 +4,7 @@ A web-based tool developed by Concordia Publishing House to facilitate translati
 
 ## Access the Tool
 
-**Live Tool:** https://roegnejj.github.io/catechism-translation-tool/
-
-**Test Mode:** https://roegnejj.github.io/catechism-translation-tool/?test=true
+https://roegnejj.github.io/catechism-translation-tool/
 
 ## Features
 
