@@ -58,6 +58,13 @@
     </div>
 
     <!-- Output Section -->
+    <div id="missingFieldsWarning" class="bg-orange-50 border-l-4 border-orange-400 p-4 mb-4 hidden">
+      <h3 class="font-bold text-orange-800 mb-2">⚠️ Missing Fields</h3>
+      <p class="text-orange-800 text-sm mb-2">The following fields were not found in your translation. They will be skipped in the YAML output:</p>
+      <p id="missingFieldsList" class="text-orange-900 font-mono text-xs bg-orange-100 p-2 rounded"></p>
+      <p class="text-orange-700 text-xs mt-2">This is normal if these terms don't apply to your language. The generated YAML will work correctly with the available fields.</p>
+    </div>
+
     <div id="outputSection" class="bg-white rounded-lg shadow-lg p-6 hidden">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold text-gray-800">Generated YAML:</h2>
@@ -154,8 +161,12 @@
       // Split content into lines and clean
       const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
 
+      // Track missing fields
+      const missingFields = [];
       if (lines.length < fieldMapping.length) {
-        alert(`Warning: Expected ${fieldMapping.length} lines, but found ${lines.length}. Some fields may be missing.`);
+        for (let i = lines.length; i < fieldMapping.length; i++) {
+          missingFields.push(fieldMapping[i].key);
+        }
       }
 
       // Build YAML structure
@@ -201,6 +212,15 @@
       // Display output
       document.getElementById('yamlOutput').textContent = yaml;
       document.getElementById('outputSection').classList.remove('hidden');
+      
+      // Show missing fields warning if any
+      const warningDiv = document.getElementById('missingFieldsWarning');
+      if (missingFields.length > 0) {
+        document.getElementById('missingFieldsList').textContent = missingFields.join(', ');
+        warningDiv.classList.remove('hidden');
+      } else {
+        warningDiv.classList.add('hidden');
+      }
     }
 
     function downloadYAML() {
