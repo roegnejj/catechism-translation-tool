@@ -163,35 +163,85 @@ const TranslationWorkstation = () => {
     return Math.round((completed / file.content.length) * 100);
   };
 
-  // YAML conversion function
+  // YAML conversion function - outputs flat af.yml format
   const generateYAMLContent = (fileKey) => {
     const file = translationFiles[fileKey];
     const fileTranslations = translations[fileKey] || {};
+    const langCode = languageCode || 'en';
     
-    const yamlData = {
-      metadata: {
-        language: languageCode || 'en',
-        title: fileTitles[fileKey] || file.title,
-        category: file.category
-      },
-      contents: []
-    };
-
+    // Build the YAML object with language code as root
+    const yamlData = {};
+    yamlData[langCode] = {};
+    
+    // Add language options (these are standard across all translations)
+    yamlData[langCode].English = "English";
+    yamlData[langCode].Chinese_Hans = "中国简体";
+    yamlData[langCode].Chinese_Hant = "中國傳統";
+    yamlData[langCode].Spanish = "Español";
+    yamlData[langCode].Finnish = "Suomi";
+    yamlData[langCode].German = "Deutsch";
+    yamlData[langCode].Japanese = "日本語";
+    yamlData[langCode].Tigrigna = "ትግርኛ";
+    yamlData[langCode].Portuguese = "Português";
+    
+    // Separate items by type
+    const interfaceItems = [];
+    const metadataItems = [];
+    const tocItems = [];
+    
     file.content.forEach(item => {
-      const translation = fileTranslations[item.id];
-      
-      // Skip N/A items
-      if (translation === '[N/A]') return;
-      
-      // Use translation if available, otherwise use original
-      const text = (translation && translation.trim().length > 0) ? translation : item.text;
-      
-      yamlData.contents.push({
-        id: item.id,
-        type: item.type,
-        text: text
-      });
+      if (item.type === 'interface') interfaceItems.push(item);
+      else if (item.type === 'metadata') metadataItems.push(item);
+      else if (item.type === 'toc') tocItems.push(item);
     });
+    
+    // Add interface terms (flat key-value)
+    interfaceItems.forEach(item => {
+      const translation = fileTranslations[item.id];
+      if (translation === '[N/A]') return;
+      const text = (translation && translation.trim().length > 0) ? translation : item.text;
+      yamlData[langCode][item.yamlKey] = text;
+    });
+    
+    // Add metadata section
+    if (metadataItems.length > 0) {
+      yamlData[langCode].metadata = {};
+      metadataItems.forEach(item => {
+        const translation = fileTranslations[item.id];
+        if (translation === '[N/A]') return;
+        const text = (translation && translation.trim().length > 0) ? translation : item.text;
+        yamlData[langCode].metadata[item.yamlKey] = text;
+      });
+    }
+    
+    // Add contents/TOC section
+    if (tocItems.length > 0) {
+      yamlData[langCode].contents = {};
+      
+      // Group TOC items by yamlKey
+      const tocGroups = {};
+      tocItems.forEach(item => {
+        if (!tocGroups[item.yamlKey]) {
+          tocGroups[item.yamlKey] = {};
+        }
+        
+        if (item.subKey === 'title') {
+          // Use translation for title
+          const translation = fileTranslations[item.id];
+          if (translation === '[N/A]') return;
+          const text = (translation && translation.trim().length > 0) ? translation : item.text;
+          tocGroups[item.yamlKey].title = text;
+        } else if (item.subKey === 'filename') {
+          // Always use original filename from source data (never translated)
+          tocGroups[item.yamlKey].filename = item.text;
+        }
+      });
+      
+      // Add to YAML
+      Object.keys(tocGroups).forEach(key => {
+        yamlData[langCode].contents[key] = tocGroups[key];
+      });
+    }
 
     return jsyaml.dump(yamlData, {
       indent: 2,
@@ -558,10 +608,6 @@ const TranslationWorkstation = () => {
                   </p>
                   <p className="text-xs text-blue-600 mt-1">
                     Common codes: es (Spanish), de (German), fr (French), zh (Chinese), ja (Japanese), ko (Korean), pt (Portuguese), ru (Russian)
-                    <br />
-                    <a href="https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-800">
-                      View complete list of ISO 639-1 language codes →
-                    </a>
                   </p>
                 </div>
               )}
@@ -586,50 +632,185 @@ const TranslationWorkstation = () => {
               </div>
 
               {/* Translation sections */}
-              {file.content.map((item) => {
-                const hasValue = fileTranslations[item.id] && fileTranslations[item.id].trim().length > 0;
-                const isHeader = item.type === 'header' || item.type === 'subheader';
-                const isQuestion = item.type === 'question';
-                const badgeColor = isHeader ? 'bg-blue-600 text-white' : 
-                                   isQuestion ? 'bg-purple-600 text-white' : 
-                                   'bg-blue-100 text-blue-800';
-                const originalTextStyle = isHeader ? 'text-lg font-semibold text-gray-800' : 
-                                          isQuestion ? 'italic' : '';
-
-                return (
-                  <div key={item.id} className={'p-4 border rounded ' + (hasValue ? 'bg-green-50' : 'bg-gray-50')}>
-                    <div className={'text-xs inline-block px-2 py-1 rounded mb-2 font-medium ' + badgeColor}>{item.type}</div>
-                    <div className={'p-2 bg-white border rounded mb-2 italic text-gray-600 ' + (item.type === 'description' ? 'whitespace-pre-wrap' : '')}>
-                      <span className={originalTextStyle}>
-                        {item.text
-                          .replace(/^#{1,5}\s*/, '')
-                          .replace(/_/g, '')
-                          .replace(/\\n/g, item.type === 'description' ? '\n' : ' ')}
-                      </span>
+              {isAppInterface ? (
+                // Special rendering for App Interface with three sections
+                <>
+                  {/* SECTION 1: Interface Terms */}
+                  <div className="border-2 border-blue-300 rounded-lg overflow-hidden">
+                    <div className="bg-blue-200 p-3">
+                      <h3 className="font-bold text-blue-900">Interface Terms</h3>
+                      <p className="text-sm text-blue-800">UI strings and labels shown throughout the app</p>
                     </div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <input
-                        type="checkbox"
-                        id={`na-${item.id}`}
-                        checked={fileTranslations[item.id] === '[N/A]'}
-                        onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.checked ? '[N/A]' : '')}
-                        className="rounded"
-                      />
-                      <label htmlFor={`na-${item.id}`} className="text-sm text-gray-600">
-                        Mark as Not Applicable (section is skipped in export)
-                      </label>
+                    <div className="bg-blue-50 p-4 space-y-4">
+                      {file.content.filter(item => item.type === 'interface').map((item) => {
+                        const hasValue = fileTranslations[item.id] && fileTranslations[item.id].trim().length > 0;
+                        return (
+                          <div key={item.id} className={'p-4 border rounded ' + (hasValue ? 'bg-white border-green-300' : 'bg-white border-gray-300')}>
+                            <div className="text-xs inline-block px-2 py-1 rounded mb-2 font-medium bg-blue-600 text-white">
+                              {item.yamlKey}
+                            </div>
+                            <div className="p-2 bg-gray-50 border rounded mb-2 italic text-gray-600">
+                              {item.text}
+                            </div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <input
+                                type="checkbox"
+                                id={`na-${item.id}`}
+                                checked={fileTranslations[item.id] === '[N/A]'}
+                                onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.checked ? '[N/A]' : '')}
+                                className="rounded"
+                              />
+                              <label htmlFor={`na-${item.id}`} className="text-sm text-gray-600">
+                                Mark as Not Applicable
+                              </label>
+                            </div>
+                            <textarea
+                              value={fileTranslations[item.id] === '[N/A]' ? '' : (fileTranslations[item.id] || '')}
+                              onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.value)}
+                              placeholder="Enter translation..."
+                              className="w-full p-2 border rounded"
+                              rows={2}
+                              disabled={fileTranslations[item.id] === '[N/A]'}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
-                    <textarea
-                      value={fileTranslations[item.id] === '[N/A]' ? '' : (fileTranslations[item.id] || '')}
-                      onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.value)}
-                      placeholder="Enter translation..."
-                      className="w-full p-2 border rounded"
-                      rows={4}
-                      disabled={fileTranslations[item.id] === '[N/A]'}
-                    />
                   </div>
-                );
-              })}
+
+                  {/* SECTION 2: Metadata */}
+                  <div className="border-2 border-yellow-300 rounded-lg overflow-hidden mt-6">
+                    <div className="bg-yellow-200 p-3">
+                      <h3 className="font-bold text-yellow-900">Metadata</h3>
+                      <p className="text-sm text-yellow-800">App headers and copyright information</p>
+                    </div>
+                    <div className="bg-yellow-50 p-4 space-y-4">
+                      {file.content.filter(item => item.type === 'metadata').map((item) => {
+                        const hasValue = fileTranslations[item.id] && fileTranslations[item.id].trim().length > 0;
+                        return (
+                          <div key={item.id} className={'p-4 border rounded ' + (hasValue ? 'bg-white border-green-300' : 'bg-white border-gray-300')}>
+                            <div className="text-xs inline-block px-2 py-1 rounded mb-2 font-medium bg-yellow-700 text-white">
+                              {item.yamlKey}
+                            </div>
+                            <div className="p-2 bg-gray-50 border rounded mb-2 italic text-gray-600">
+                              {item.text}
+                            </div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <input
+                                type="checkbox"
+                                id={`na-${item.id}`}
+                                checked={fileTranslations[item.id] === '[N/A]'}
+                                onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.checked ? '[N/A]' : '')}
+                                className="rounded"
+                              />
+                              <label htmlFor={`na-${item.id}`} className="text-sm text-gray-600">
+                                Mark as Not Applicable
+                              </label>
+                            </div>
+                            <textarea
+                              value={fileTranslations[item.id] === '[N/A]' ? '' : (fileTranslations[item.id] || '')}
+                              onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.value)}
+                              placeholder="Enter translation..."
+                              className="w-full p-2 border rounded"
+                              rows={2}
+                              disabled={fileTranslations[item.id] === '[N/A]'}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* SECTION 3: Table of Contents */}
+                  <div className="border-2 border-green-300 rounded-lg overflow-hidden mt-6">
+                    <div className="bg-green-200 p-3">
+                      <h3 className="font-bold text-green-900">Table of Contents</h3>
+                      <p className="text-sm text-green-800">Translate the navigation menu titles (filenames are auto-generated)</p>
+                    </div>
+                    <div className="bg-green-50 p-4 space-y-4">
+                      {file.content.filter(item => item.type === 'toc' && item.subKey === 'title').map((item) => {
+                        const hasValue = fileTranslations[item.id] && fileTranslations[item.id].trim().length > 0;
+                        return (
+                          <div key={item.id} className={'p-4 border rounded ' + (hasValue ? 'bg-white border-green-300' : 'bg-white border-gray-300')}>
+                            <div className="text-xs inline-block px-2 py-1 rounded mb-2 font-medium bg-green-700 text-white">
+                              {item.yamlKey}
+                            </div>
+                            <div className="p-2 bg-gray-50 border rounded mb-2 italic text-gray-600">
+                              {item.text}
+                            </div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <input
+                                type="checkbox"
+                                id={`na-${item.id}`}
+                                checked={fileTranslations[item.id] === '[N/A]'}
+                                onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.checked ? '[N/A]' : '')}
+                                className="rounded"
+                              />
+                              <label htmlFor={`na-${item.id}`} className="text-sm text-gray-600">
+                                Mark as Not Applicable
+                              </label>
+                            </div>
+                            <textarea
+                              value={fileTranslations[item.id] === '[N/A]' ? '' : (fileTranslations[item.id] || '')}
+                              onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.value)}
+                              placeholder="Enter translation..."
+                              className="w-full p-2 border rounded"
+                              rows={2}
+                              disabled={fileTranslations[item.id] === '[N/A]'}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // Regular rendering for other files
+                file.content.map((item) => {
+                  const hasValue = fileTranslations[item.id] && fileTranslations[item.id].trim().length > 0;
+                  const isHeader = item.type === 'header' || item.type === 'subheader';
+                  const isQuestion = item.type === 'question';
+                  const badgeColor = isHeader ? 'bg-blue-600 text-white' : 
+                                     isQuestion ? 'bg-purple-600 text-white' : 
+                                     'bg-blue-100 text-blue-800';
+                  const originalTextStyle = isHeader ? 'text-lg font-semibold text-gray-800' : 
+                                            isQuestion ? 'italic' : '';
+
+                  return (
+                    <div key={item.id} className={'p-4 border rounded ' + (hasValue ? 'bg-green-50' : 'bg-gray-50')}>
+                      <div className={'text-xs inline-block px-2 py-1 rounded mb-2 font-medium ' + badgeColor}>{item.type}</div>
+                      <div className={'p-2 bg-white border rounded mb-2 italic text-gray-600 ' + (item.type === 'description' ? 'whitespace-pre-wrap' : '')}>
+                        <span className={originalTextStyle}>
+                          {item.text
+                            .replace(/^#{1,5}\s*/, '')
+                            .replace(/_/g, '')
+                            .replace(/\\n/g, item.type === 'description' ? '\n' : ' ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          type="checkbox"
+                          id={`na-${item.id}`}
+                          checked={fileTranslations[item.id] === '[N/A]'}
+                          onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.checked ? '[N/A]' : '')}
+                          className="rounded"
+                        />
+                        <label htmlFor={`na-${item.id}`} className="text-sm text-gray-600">
+                          Mark as Not Applicable (section is skipped in export)
+                        </label>
+                      </div>
+                      <textarea
+                        value={fileTranslations[item.id] === '[N/A]' ? '' : (fileTranslations[item.id] || '')}
+                        onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.value)}
+                        placeholder="Enter translation..."
+                        className="w-full p-2 border rounded"
+                        rows={4}
+                        disabled={fileTranslations[item.id] === '[N/A]'}
+                      />
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
