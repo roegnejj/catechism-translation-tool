@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>App Interface Terms → YAML Converter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-4xl mx-auto p-6">
+    <!-- Header -->
+    <div class="bg-blue-600 text-white p-6 rounded-lg shadow-lg mb-6">
+      <div className="flex items-center gap-4 mb-2">
+        <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none">
+          <rect x="10" y="10" width="80" height="80" fill="white" opacity="0.2"/>
+          <text x="50" y="65" font-size="48" fill="white" text-anchor="middle" font-family="serif" font-weight="bold">C</text>
+        </svg>
+        <div>
+          <h1 class="text-3xl font-bold">App Interface Terms → YAML Converter</h1>
+          <p class="text-blue-100">Convert translated interface terms to YAML format</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+      <h2 class="font-bold text-yellow-800 mb-2">How to Use:</h2>
+      <ol class="list-decimal list-inside space-y-1 text-yellow-800">
+        <li>Enter the language code (e.g., es, de, fi, pt, zh_Hans)</li>
+        <li>Paste the translated content from app-interface-terms.md</li>
+        <li>Click "Convert to YAML"</li>
+        <li>Download the generated .yml file</li>
+      </ol>
+    </div>
+
+    <!-- Input Section -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div class="mb-4">
+        <label class="block text-gray-700 font-bold mb-2">Language Code:</label>
+        <input 
+          type="text" 
+          id="langCode" 
+          placeholder="e.g., es, de, fi, pt, zh_Hans, zh_Hant, ti, jp"
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p class="text-sm text-gray-500 mt-1">Common codes: es (Spanish), de (German), fi (Finnish), pt (Portuguese), zh_Hans (Chinese Simplified), zh_Hant (Chinese Traditional)</p>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 font-bold mb-2">Translated Content:</label>
+        <textarea 
+          id="translatedContent"
+          rows="15"
+          placeholder="Paste your translated app-interface-terms.md content here..."
+          class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+        ></textarea>
+        <p class="text-sm text-gray-500 mt-1">Paste the entire content from your translated app-interface-terms.md file</p>
+      </div>
+
+      <button 
+        onclick="convertToYAML()"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition"
+      >
+        Convert to YAML
+      </button>
+    </div>
+
+    <!-- Output Section -->
+    <div id="outputSection" class="bg-white rounded-lg shadow-lg p-6 hidden">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-800">Generated YAML:</h2>
+        <button 
+          onclick="downloadYAML()"
+          class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition"
+        >
+          Download .yml File
+        </button>
+      </div>
+      <pre id="yamlOutput" class="bg-gray-50 border border-gray-300 rounded p-4 overflow-x-auto text-sm font-mono"></pre>
+    </div>
+  </div>
+
+  <script>
+    let generatedYAML = '';
+    let currentLangCode = '';
+
+    // Mapping of line positions to YAML keys
+    const fieldMapping = [
+      { key: 'settings', path: 'settings' },
+      { key: 'language', path: 'language' },
+      { key: 'pagination', path: 'pagination' },
+      { key: 'font_size', path: 'font_size' },
+      { key: 'theme', path: 'theme' },
+      { key: 'true', path: 'true' },
+      { key: 'false', path: 'false' },
+      { key: 'default', path: 'default' },
+      { key: 'select_language', path: 'select_language' },
+      { key: 'restore_purchase', path: 'restore_purchase' },
+      { key: 'zendesk_support', path: 'zendesk_support' },
+      { key: 'discover', path: 'discover' },
+      { key: 'header1', path: 'metadata.header1' },
+      { key: 'header2', path: 'metadata.header2' },
+      { key: 'toc_name', path: 'metadata.toc_name' },
+      { key: 'copyright', path: 'metadata.copyright' },
+      { key: 'preface_title', path: 'contents.preface.title' },
+      { key: 'ten_commandments_title', path: 'contents.ten_commandments.title' },
+      { key: 'the_creed_title', path: 'contents.the_creed.title' },
+      { key: 'lords_prayer_title', path: 'contents.the_lords_prayer.title' },
+      { key: 'baptism_title', path: 'contents.the_sacrament_of_holy_baptism.title' },
+      { key: 'confession_title', path: 'contents.confession.title' },
+      { key: 'altar_title', path: 'contents.the_sacrament_of_the_altar.title' },
+      { key: 'daily_prayers_title', path: 'contents.daily_prayers.title' },
+      { key: 'table_of_duties_title', path: 'contents.table_of_duties.title' },
+      { key: 'questions_answers_title', path: 'contents.christian_questions_with_their_answers.title' },
+      { key: 'about_title', path: 'contents.about.title' },
+      { key: 'notifications', path: 'notifications' },
+      { key: 'daily_reminder', path: 'daily_reminder' },
+      { key: 'feedback', path: 'feedback' },
+      { key: 'night_time', path: 'night_time' },
+      { key: 'rate_our_app', path: 'rate_our_app' },
+      { key: 'interface', path: 'interface' },
+      { key: 'credits', path: 'credits' },
+      { key: 'development', path: 'development' },
+      { key: 'software', path: 'software' },
+      { key: 'search', path: 'search' },
+      { key: 'favorites', path: 'favorites' },
+      { key: 'unable_to_connect', path: 'unable_to_connect' },
+      { key: 'connection_required', path: 'connection_required' }
+    ];
+
+    // Filenames for contents
+    const filenames = {
+      preface: 'index.html',
+      ten_commandments: 'index.html',
+      the_creed: 'the-creed.html',
+      the_lords_prayer: 'the-lords-prayer.html',
+      the_sacrament_of_holy_baptism: 'the-sacrament-of-baptism.html',
+      confession: 'confession.html',
+      the_sacrament_of_the_altar: 'the-sacrament-of-the-altar.html',
+      daily_prayers: 'daily-prayers.html',
+      table_of_duties: 'table-of-duties.html',
+      christian_questions_with_their_answers: 'christian-questions.html',
+      about: 'about.html'
+    };
+
+    function convertToYAML() {
+      const langCode = document.getElementById('langCode').value.trim();
+      const content = document.getElementById('translatedContent').value.trim();
+
+      if (!langCode) {
+        alert('Please enter a language code');
+        return;
+      }
+
+      if (!content) {
+        alert('Please paste the translated content');
+        return;
+      }
+
+      currentLangCode = langCode;
+
+      // Split content into lines and clean
+      const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+
+      if (lines.length < fieldMapping.length) {
+        alert(`Warning: Expected ${fieldMapping.length} lines, but found ${lines.length}. Some fields may be missing.`);
+      }
+
+      // Build YAML structure
+      let yaml = `${langCode}:\n`;
+      yaml += `  English: "English"\n`;
+      yaml += `  Chinese_Hans: "中国简体"\n`;
+      yaml += `  Chinese_Hant: "中國傳統"\n`;
+      yaml += `  Spanish: "Español"\n`;
+      yaml += `  Finnish: "Suomi"\n`;
+      yaml += `  German: "Deutsch"\n`;
+      yaml += `  Japanese: "日本語"\n`;
+      yaml += `  Tigrigna: "ትግርኛ"\n`;
+      yaml += `  Portuguese: "Português"\n`;
+
+      // Process each field
+      for (let i = 0; i < fieldMapping.length && i < lines.length; i++) {
+        const mapping = fieldMapping[i];
+        const value = lines[i].replace(/"/g, '\\"'); // Escape quotes
+        
+        const pathParts = mapping.path.split('.');
+        
+        if (pathParts.length === 1) {
+          // Top-level key
+          yaml += `  ${pathParts[0]}: "${value}"\n`;
+        } else if (pathParts[0] === 'metadata') {
+          // Metadata section
+          if (i === 12) yaml += `  metadata:\n`; // First metadata item
+          yaml += `    ${pathParts[1]}: "${value}"\n`;
+        } else if (pathParts[0] === 'contents') {
+          // Contents section
+          if (i === 16) yaml += `  contents:\n`; // First contents item
+          const section = pathParts[1];
+          if (pathParts[2] === 'title') {
+            yaml += `      ${section}:\n`;
+            yaml += `        title: "${value}"\n`;
+            yaml += `        filename: "${filenames[section]}"\n`;
+          }
+        }
+      }
+
+      generatedYAML = yaml;
+      
+      // Display output
+      document.getElementById('yamlOutput').textContent = yaml;
+      document.getElementById('outputSection').classList.remove('hidden');
+    }
+
+    function downloadYAML() {
+      if (!generatedYAML) {
+        alert('Please convert content first');
+        return;
+      }
+
+      const blob = new Blob([generatedYAML], { type: 'text/yaml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentLangCode}.yml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
