@@ -393,6 +393,7 @@ const translationFiles = {
     "category": "App Content",
     "content": [
       // SECTION 1: Interface Terms (top-level key-value pairs)
+      {"id": "interface_english_name", "text": "English", "type": "interface", "yamlKey": "English"},
       {"id": "interface_settings", "text": "Settings", "type": "interface", "yamlKey": "settings"},
       {"id": "interface_language", "text": "Language", "type": "interface", "yamlKey": "language"},
       {"id": "interface_pagination", "text": "Pagination", "type": "interface", "yamlKey": "pagination"},
@@ -401,10 +402,10 @@ const translationFiles = {
       {"id": "interface_true", "text": "On", "type": "interface", "yamlKey": "true"},
       {"id": "interface_false", "text": "Off", "type": "interface", "yamlKey": "false"},
       {"id": "interface_default", "text": "Default", "type": "interface", "yamlKey": "default"},
-      {"id": "interface_select_language", "text": "The Small Catechism", "type": "interface", "yamlKey": "select_language"},
-      {"id": "interface_restore_purchase", "text": "by Dr. Martin Luther", "type": "interface", "yamlKey": "restore_purchase"},
-      {"id": "interface_zendesk_support", "text": "Table of Contents", "type": "interface", "yamlKey": "zendesk_support"},
-      {"id": "interface_discover", "text": "From Luther's Small Catechism © 1986 Concordia Publishing House, cph.org", "type": "interface", "yamlKey": "discover"},
+      {"id": "interface_select_language", "text": "Select Language", "type": "interface", "yamlKey": "select_language"},
+      {"id": "interface_restore_purchase", "text": "Restore Purchase", "type": "interface", "yamlKey": "restore_purchase"},
+      {"id": "interface_zendesk_support", "text": "Contact Support", "type": "interface", "yamlKey": "zendesk_support"},
+      {"id": "interface_discover", "text": "Discover", "type": "interface", "yamlKey": "discover"},
       {"id": "interface_notifications", "text": "Notifications", "type": "interface", "yamlKey": "notifications"},
       {"id": "interface_daily_reminder", "text": "Daily Reminder", "type": "interface", "yamlKey": "daily_reminder"},
       {"id": "interface_feedback", "text": "Feedback", "type": "interface", "yamlKey": "feedback"},
@@ -420,10 +421,10 @@ const translationFiles = {
       {"id": "interface_connection_required", "text": "A connection is required to download the initial content", "type": "interface", "yamlKey": "connection_required"},
       
       // SECTION 2: Metadata (nested under metadata key)
-      {"id": "metadata_header1", "text": "Luther's Preface", "type": "metadata", "yamlKey": "header1"},
-      {"id": "metadata_header2", "text": "The Ten Commandments", "type": "metadata", "yamlKey": "header2"},
-      {"id": "metadata_toc_name", "text": "The Apostles' Creed", "type": "metadata", "yamlKey": "toc_name"},
-      {"id": "metadata_copyright", "text": "Copyright © 1986, 1991 by Concordia Publishing House. All rights reserved.", "type": "metadata", "yamlKey": "copyright"},
+      {"id": "metadata_header1", "text": "Luther's Small Catechism", "type": "metadata", "yamlKey": "header1"},
+      {"id": "metadata_header2", "text": "by Dr. Martin Luther", "type": "metadata", "yamlKey": "header2"},
+      {"id": "metadata_toc_name", "text": "Table of Contents", "type": "metadata", "yamlKey": "toc_name"},
+      {"id": "metadata_copyright", "text": "From Luther's Small Catechism © 1986 Concordia Publishing House, cph.org", "type": "metadata", "yamlKey": "copyright"},
       
       // SECTION 3: Table of Contents (nested under contents key with title + filename)
       {"id": "toc_preface_title", "text": "Luther's Preface", "type": "toc", "yamlKey": "preface", "subKey": "title"},
