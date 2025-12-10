@@ -163,6 +163,19 @@ const TranslationWorkstation = () => {
     return Math.round((completed / file.content.length) * 100);
   };
 
+  // Slugify function to convert translated titles to filenames
+  const slugify = (text) => {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')           // Replace spaces with -
+      .replace(/[^\w\-äöüßàáâãèéêìíîòóôõùúûñçąćęłńśźżčďěňřšťůžåæø]+/g, '') // Keep accented chars
+      .replace(/\-\-+/g, '-')         // Replace multiple - with single -
+      .replace(/^-+/, '')             // Trim - from start
+      .replace(/-+$/, '');            // Trim - from end
+  };
+
   // YAML conversion function - outputs flat af.yml format
   const generateYAMLContent = (fileKey) => {
     const file = translationFiles[fileKey];
@@ -173,18 +186,7 @@ const TranslationWorkstation = () => {
     const yamlData = {};
     yamlData[langCode] = {};
     
-    // Add language options (these are standard across all translations)
-    yamlData[langCode].English = "English";
-    yamlData[langCode].Chinese_Hans = "中国简体";
-    yamlData[langCode].Chinese_Hant = "中國傳統";
-    yamlData[langCode].Spanish = "Español";
-    yamlData[langCode].Finnish = "Suomi";
-    yamlData[langCode].German = "Deutsch";
-    yamlData[langCode].Japanese = "日本語";
-    yamlData[langCode].Tigrigna = "ትግርኛ";
-    yamlData[langCode].Portuguese = "Português";
-    
-    // Separate items by type
+    // Separate items by type FIRST so we can check for English translation
     const interfaceItems = [];
     const metadataItems = [];
     const tocItems = [];
@@ -195,8 +197,37 @@ const TranslationWorkstation = () => {
       else if (item.type === 'toc') tocItems.push(item);
     });
     
-    // Add interface terms (flat key-value)
+    // Handle English language name specially
+    const englishItem = interfaceItems.find(item => item.yamlKey === 'English');
+    if (englishItem) {
+      const englishTranslation = fileTranslations[englishItem.id];
+      if (englishTranslation && englishTranslation.trim().length > 0 && englishTranslation !== '[N/A]') {
+        // User translated "English" - add (English) suffix
+        // e.g., "Inglés" becomes "Inglés (English)"
+        yamlData[langCode].English = englishTranslation.includes('(English)') 
+          ? englishTranslation 
+          : `${englishTranslation} (English)`;
+      } else {
+        // No translation provided, use default
+        yamlData[langCode].English = "English";
+      }
+    } else {
+      yamlData[langCode].English = "English";
+    }
+    
+    // Add other language options (these are hardcoded)
+    yamlData[langCode].Chinese_Hans = "中国简体";
+    yamlData[langCode].Chinese_Hant = "中國傳統";
+    yamlData[langCode].Spanish = "Español";
+    yamlData[langCode].Finnish = "Suomi";
+    yamlData[langCode].German = "Deutsch";
+    yamlData[langCode].Japanese = "日本語";
+    yamlData[langCode].Tigrigna = "ትግርኛ";
+    yamlData[langCode].Portuguese = "Português";
+    
+    // Add interface terms (flat key-value) - skip English since we handled it above
     interfaceItems.forEach(item => {
+      if (item.yamlKey === 'English') return; // Already handled
       const translation = fileTranslations[item.id];
       if (translation === '[N/A]') return;
       const text = (translation && translation.trim().length > 0) ? translation : item.text;
@@ -231,14 +262,30 @@ const TranslationWorkstation = () => {
           if (translation === '[N/A]') return;
           const text = (translation && translation.trim().length > 0) ? translation : item.text;
           tocGroups[item.yamlKey].title = text;
-        } else if (item.subKey === 'filename') {
-          // Always use original filename from source data (never translated)
-          tocGroups[item.yamlKey].filename = item.text;
         }
       });
       
-      // Add to YAML
+      // Generate filenames from translated titles
       Object.keys(tocGroups).forEach(key => {
+        const title = tocGroups[key].title;
+        if (title) {
+          // Special case: preface always uses index.html
+          if (key === 'preface') {
+            tocGroups[key].filename = 'index.html';
+          } else if (key === 'ten_commandments') {
+            // Special case: ten_commandments can use index.html OR generated filename
+            // If untranslated (still English), use index.html
+            // If translated, generate from translation
+            if (title === 'The Ten Commandments') {
+              tocGroups[key].filename = 'index.html';
+            } else {
+              tocGroups[key].filename = slugify(title) + '.html';
+            }
+          } else {
+            // Generate filename from translated title
+            tocGroups[key].filename = slugify(title) + '.html';
+          }
+        }
         yamlData[langCode].contents[key] = tocGroups[key];
       });
     }
@@ -725,7 +772,7 @@ const TranslationWorkstation = () => {
                   <div className="border-2 border-green-300 rounded-lg overflow-hidden mt-6">
                     <div className="bg-green-200 p-3">
                       <h3 className="font-bold text-green-900">Table of Contents</h3>
-                      <p className="text-sm text-green-800">Translate the navigation menu titles (filenames are auto-generated)</p>
+                      <p className="text-sm text-green-800">Translate the navigation menu titles - filenames will be auto-generated from your translations (e.g., "Die Zehn Gebote" → die-zehn-gebote.html)</p>
                     </div>
                     <div className="bg-green-50 p-4 space-y-4">
                       {file.content.filter(item => item.type === 'toc' && item.subKey === 'title').map((item) => {
