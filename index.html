@@ -177,125 +177,133 @@ const TranslationWorkstation = () => {
   };
 
   // YAML conversion function - outputs flat af.yml format
-  const generateYAMLContent = (fileKey) => {
-    const file = translationFiles[fileKey];
-    const fileTranslations = translations[fileKey] || {};
-    const langCode = languageCode || 'en';
-    
-    // Build the YAML object with language code as root
-    const yamlData = {};
-    yamlData[langCode] = {};
-    
-    // Separate items by type FIRST so we can check for English translation
-    const interfaceItems = [];
-    const metadataItems = [];
-    const tocItems = [];
-    
-    file.content.forEach(item => {
-      if (item.type === 'interface') interfaceItems.push(item);
-      else if (item.type === 'metadata') metadataItems.push(item);
-      else if (item.type === 'toc') tocItems.push(item);
-    });
-    
-    // Handle English language name specially
-    const englishItem = interfaceItems.find(item => item.yamlKey === 'English');
-    if (englishItem) {
-      const englishTranslation = fileTranslations[englishItem.id];
-      if (englishTranslation && englishTranslation.trim().length > 0 && englishTranslation !== '[N/A]') {
-        // User translated "English" - add (English) suffix
-        // e.g., "Inglés" becomes "Inglés (English)"
-        yamlData[langCode].English = englishTranslation.includes('(English)') 
-          ? englishTranslation 
-          : `${englishTranslation} (English)`;
-      } else {
-        // No translation provided, use default
-        yamlData[langCode].English = "English";
-      }
+const generateYAMLContent = (fileKey) => {
+  const file = translationFiles[fileKey];
+  const fileTranslations = translations[fileKey] || {};
+  const code = languageCode;
+
+  // ── helper: wrap value in double quotes, escaping internal quotes/backslashes
+  const q = (str) => {
+    if (str == null || str === '') return '""';
+    const escaped = String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `"${escaped}"`;
+  };
+
+  // ── language code → [YAML key, native name fallback] ─────────────────────────
+  // Used to output the current language's name entry at the top of the file.
+  // If a translatable entry exists in the data (e.g. yamlKey: "Afrikaans"), it
+  // takes precedence; otherwise the fallback native name is used.
+  const LANG_CODE_MAP = {
+    'af':      ['Afrikaans',    'Afrikaans'],
+    'en':      ['English',      'English'],
+    'zh-hans': ['Chinese_Hans', '中国简体'],
+    'zh-hant': ['Chinese_Hant', '中國傳統'],
+    'es':      ['Spanish',      'Español'],
+    'fi':      ['Finnish',      'Suomi'],
+    'de':      ['German',       'Deutsch'],
+    'ja':      ['Japanese',     '日本語'],
+    'ti':      ['Tigrigna',     'ትግርኛ'],
+    'pt':      ['Portuguese',   'Português'],
+  };
+
+  // ── catechism sections in output order ───────────────────────────────────────
+  // [translationFiles key, YAML contents key]
+  // The YAML contents key must match the yamlKey used on toc_* entries in the data.
+  const SECTIONS = [
+    ['index',                     'preface'],
+    ['10-commandments',           'ten_commandments'],
+    ['creed',                     'the_creed'],
+    ['lords-prayer',              'the_lords_prayer'],
+    ['sacrament-of-holy-baptism', 'the_sacrament_of_holy_baptism'],
+    ['confession',                'confession'],
+    ['sacrament-of-the-altar',    'the_sacrament_of_the_altar'],
+    ['daily-prayers',             'daily_prayers'],
+    ['table-of-duties',           'table_of_duties'],
+    ['questions-answers',         'christian_questions_with_their_answers'],
+    ['about',                     'about'],
+  ];
+
+  // ── interface terms to include, in this exact order ──────────────────────────
+  // Everything else in the interface section (notifications, feedback, search,
+  // etc.) is intentionally excluded from the YAML export.
+  const INTERFACE_TERMS_ORDER = [
+    'settings', 'language', 'pagination', 'font_size', 'theme',
+    'true', 'false', 'default',
+    'select_language', 'restore_purchase', 'zendesk_support', 'discover',
+  ];
+
+  // ── build lookup: yamlKey → translated string ────────────────────────────────
+  const byYamlKey = {};
+  for (const item of file.content) {
+    if (item.yamlKey && fileTranslations[item.id]) {
+      // For toc items, key them as "yamlKey|subKey" to avoid collisions
+      // between title and filename entries for the same section.
+      const lookupKey = item.subKey
+        ? `${item.yamlKey}|${item.subKey}`
+        : item.yamlKey;
+      byYamlKey[lookupKey] = fileTranslations[item.id];
+    }
+  }
+
+  // Convenience: look up a toc title by section yamlKey
+  const tocTitle = (sectionYamlKey) => byYamlKey[`${sectionYamlKey}|title`] || '';
+
+  // ── assemble YAML ─────────────────────────────────────────────────────────────
+  let yaml = `${code}:\n`;
+
+  // 1. Language name(s) — current language first, then English
+  const [currentLangYamlKey, currentLangFallback] = LANG_CODE_MAP[code.toLowerCase()] || [];
+  if (currentLangYamlKey && currentLangYamlKey !== 'English') {
+    const value = byYamlKey[currentLangYamlKey] || currentLangFallback || currentLangYamlKey;
+    yaml += `  ${currentLangYamlKey}: ${q(value)}\n`;
+  }
+  yaml += `  English: ${q(byYamlKey['English'] || 'English')}\n`;
+
+  // 2. Interface terms
+  for (const yamlKey of INTERFACE_TERMS_ORDER) {
+    if (byYamlKey[yamlKey]) {
+      yaml += `  ${yamlKey}: ${q(byYamlKey[yamlKey])}\n`;
+    }
+  }
+
+  // 3. Metadata block
+  const metadataItems = file.content.filter(
+    item => item.type === 'metadata' && item.yamlKey && fileTranslations[item.id]
+  );
+  if (metadataItems.length > 0) {
+    yaml += `  metadata:\n`;
+    for (const item of metadataItems) {
+      yaml += `    ${item.yamlKey}: ${q(fileTranslations[item.id])}\n`;
+    }
+  }
+
+  // 4. Contents block
+  yaml += `  contents:\n`;
+  for (const [sectionKey, yamlSectionKey] of SECTIONS) {
+    const title = tocTitle(yamlSectionKey);
+
+    // Filename: slugify fileTitles[sectionKey] (the full translated section title
+    // the translator entered at the top of each section card), falling back to
+    // the short TOC title if no file title was entered.
+    // Preface always overrides to index.html regardless.
+    let filename;
+    if (sectionKey === 'index') {
+      filename = 'index.html';
     } else {
-      yamlData[langCode].English = "English";
-    }
-    
-    // Add other language options (these are hardcoded)
-    yamlData[langCode].Chinese_Hans = "中国简体";
-    yamlData[langCode].Chinese_Hant = "中國傳統";
-    yamlData[langCode].Spanish = "Español";
-    yamlData[langCode].Finnish = "Suomi";
-    yamlData[langCode].German = "Deutsch";
-    yamlData[langCode].Japanese = "日本語";
-    yamlData[langCode].Tigrigna = "ትግርኛ";
-    yamlData[langCode].Portuguese = "Português";
-    
-    // Add interface terms (flat key-value) - skip English since we handled it above
-    interfaceItems.forEach(item => {
-      if (item.yamlKey === 'English') return; // Already handled
-      const translation = fileTranslations[item.id];
-      if (translation === '[N/A]') return;
-      const text = (translation && translation.trim().length > 0) ? translation : item.text;
-      yamlData[langCode][item.yamlKey] = text;
-    });
-    
-    // Add metadata section
-    if (metadataItems.length > 0) {
-      yamlData[langCode].metadata = {};
-      metadataItems.forEach(item => {
-        const translation = fileTranslations[item.id];
-        if (translation === '[N/A]') return;
-        const text = (translation && translation.trim().length > 0) ? translation : item.text;
-        yamlData[langCode].metadata[item.yamlKey] = text;
-      });
-    }
-    
-    // Add contents/TOC section
-    if (tocItems.length > 0) {
-      yamlData[langCode].contents = {};
-      
-      // Group TOC items by yamlKey
-      const tocGroups = {};
-      tocItems.forEach(item => {
-        if (!tocGroups[item.yamlKey]) {
-          tocGroups[item.yamlKey] = {};
-        }
-        
-        if (item.subKey === 'title') {
-          // Use translation for title
-          const translation = fileTranslations[item.id];
-          if (translation === '[N/A]') return;
-          const text = (translation && translation.trim().length > 0) ? translation : item.text;
-          tocGroups[item.yamlKey].title = text;
-        }
-      });
-      
-      // Generate filenames from translated titles
-      Object.keys(tocGroups).forEach(key => {
-        const title = tocGroups[key].title;
-        if (title) {
-          // Special case: preface always uses index.html
-          if (key === 'preface') {
-            tocGroups[key].filename = 'index.html';
-          } else if (key === 'ten_commandments') {
-            // Special case: ten_commandments can use index.html OR generated filename
-            // If untranslated (still English), use index.html
-            // If translated, generate from translation
-            if (title === 'The Ten Commandments') {
-              tocGroups[key].filename = 'index.html';
-            } else {
-              tocGroups[key].filename = slugify(title) + '.html';
-            }
-          } else {
-            // Generate filename from translated title
-            tocGroups[key].filename = slugify(title) + '.html';
-          }
-        }
-        yamlData[langCode].contents[key] = tocGroups[key];
-      });
+      const fileTitle = (fileTitles[sectionKey] || '').trim();
+      const base = fileTitle || title;
+      filename = base ? slugify(base) + '.html' : '';
     }
 
-    return jsyaml.dump(yamlData, {
-      indent: 2,
-      lineWidth: -1,
-      noRefs: true
-    });
-  };
+    if (title || filename) {
+      yaml += `    ${yamlSectionKey}:\n`;
+      if (title)    yaml += `      title: ${q(title)}\n`;
+      if (filename) yaml += `      filename: "${filename}"\n`;
+    }
+  }
+
+  return yaml;
+};
 
   // Generate markdown content
   const generateMarkdownContent = (fileKey) => {
@@ -356,8 +364,11 @@ const TranslationWorkstation = () => {
     
     let content, filename, mimeType;
     
-    if (isAppInterface && languageCode) {
-      // Generate YAML
+    if (isAppInterface) {
+      if (!languageCode) {
+        alert('Please enter a language code (e.g., "af" for Afrikaans) before exporting the interface file.');
+        return;
+      }
       content = generateYAMLContent(fileKey);
       filename = `${languageCode}.yml`;
       mimeType = 'text/yaml';
