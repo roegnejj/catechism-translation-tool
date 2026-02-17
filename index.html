@@ -251,13 +251,32 @@ const generateYAMLContent = (fileKey) => {
   // ── assemble YAML ─────────────────────────────────────────────────────────────
   let yaml = `${code}:\n`;
 
-  // 1. Language name(s) — current language first, then English
-  const [currentLangYamlKey, currentLangFallback] = LANG_CODE_MAP[code.toLowerCase()] || [];
-  if (currentLangYamlKey && currentLangYamlKey !== 'English') {
-    const value = byYamlKey[currentLangYamlKey] || currentLangFallback || currentLangYamlKey;
-    yaml += `  ${currentLangYamlKey}: ${q(value)}\n`;
+// 1. Language names — all known languages, current language first.
+// Native names are hardcoded as fallbacks so output is always correct
+// even if the translator hasn't entered them in the tool.
+const ALL_LANGUAGES = [
+  ['Afrikaans',    'Afrikaans'],
+  ['English',      'English'],
+  ['Chinese_Hans', '中国简体'],
+  ['Chinese_Hant', '中國傳統'],
+  ['Spanish',      'Español'],
+  ['Finnish',      'Suomi'],
+  ['German',       'Deutsch'],
+  ['Japanese',     '日本語'],
+  ['Tigrigna',     'ትግርኛ'],
+  ['Portuguese',   'Português'],
+];
+
+const [currentLangYamlKey] = LANG_CODE_MAP[code.toLowerCase()] || [];
+
+if (currentLangYamlKey) {
+  yaml += `  ${currentLangYamlKey}: ${q(byYamlKey[currentLangYamlKey] || currentLangYamlKey)}\n`;
+}
+for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
+  if (yamlKey !== currentLangYamlKey) {
+    yaml += `  ${yamlKey}: ${q(byYamlKey[yamlKey] || nativeName)}\n`;
   }
-  yaml += `  English: ${q(byYamlKey['English'] || 'English')}\n`;
+}
 
   // 2. Interface terms
   for (const yamlKey of INTERFACE_TERMS_ORDER) {
