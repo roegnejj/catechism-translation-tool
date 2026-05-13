@@ -19,6 +19,11 @@ Apple AppStore & Google Play store listing content
 - Preserves markdown formatting
 - Works offline after initial load or download offline text (.txt) files, if preferred
 - Download completed translations as .md files
+- Full support for non-Latin scripts (Thai, Chinese, Japanese, Tigrigna, etc.) in titles and filenames
+
+## A Note on Filenames
+
+In the **Table of Contents** section of the App Interface Terms file, each entry has an optional **Filename** field underneath the title. You can leave this blank — the tool will auto-generate a filename from the translated title (e.g., "Die Zehn Gebote" → `die-zehn-gebote.html`). If you want a custom slug or your script doesn't translate well into a URL-friendly form, enter your preferred filename directly. The tool warns you on export if any filenames look broken.
 
 ## Getting Started
 
