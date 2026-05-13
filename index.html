@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Luther's Small Catechism Translation Tool</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect x='0' y='0' width='120' height='120' rx='20' fill='white'/%3E%3Cg transform='translate(60,60) scale(2) translate(-60,-60)'%3E%3Cpath fill='%23355258' d='M61.8,43.1l-2.6,2.6L57,43.6c-6-6-15.6-6-21.6,0c-6,6-6,15.6,0,21.6l2.2,2.2l21.6,21.6l21.6-21.6l2.6-2.6c6-6,6-15.6,0-21.6C77.5,37.2,67.8,37.2,61.8,43.1z M70.1,64.6h-6.9v6.9h-6.5v-6.9h-6.9v-6.5h6.9v-6.9h6.5v6.9h6.9V64.6z'/%3E%3C/g%3E%3C/svg%3E">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -11,7 +14,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-    <script src="translations-data.js"></script>
+    <script src="translations-data.js?v=2"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -138,10 +141,21 @@ const TranslationWorkstation = () => {
     }));
   };
 
+  // Items that are not rendered in the UI shouldn't count toward progress.
+  // The app-interface TOC section only displays subKey === 'title' rows;
+  // subKey === 'filename' rows are orphaned data (filenames are built from
+  // fileTitles at export time), so they'd otherwise hold progress under 100%.
+  const isRenderable = (item, fileKey) => {
+    if (fileKey === 'app-interface' && item.type === 'toc' && item.subKey !== 'title') {
+      return false;
+    }
+    return true;
+  };
+
   const isFileComplete = (fileKey) => {
     const file = translationFiles[fileKey];
     const fileTranslations = translations[fileKey] || {};
-    return file.content.every(item => {
+    return file.content.filter(item => isRenderable(item, fileKey)).every(item => {
       const value = fileTranslations[item.id];
       return value && (value.trim().length > 0 || value === '[N/A]');
     });
@@ -156,24 +170,28 @@ const TranslationWorkstation = () => {
   const getFileProgress = (fileKey) => {
     const file = translationFiles[fileKey];
     const fileTranslations = translations[fileKey] || {};
-    const completed = file.content.filter(item => {
+    const renderable = file.content.filter(item => isRenderable(item, fileKey));
+    const completed = renderable.filter(item => {
       const value = fileTranslations[item.id];
       return value && (value.trim().length > 0 || value === '[N/A]');
     }).length;
-    return Math.round((completed / file.content.length) * 100);
+    return Math.round((completed / renderable.length) * 100);
   };
 
-  // Slugify function to convert translated titles to filenames
+  // Slugify function to convert translated titles to filenames.
+  // Preserves Unicode letters (Thai, Chinese, Japanese, Tigrigna, etc.) instead
+  // of stripping them. Only removes characters that are unsafe in URLs or on
+  // common filesystems.
   const slugify = (text) => {
     return text
       .toString()
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, '-')           // Replace spaces with -
-      .replace(/[^\w\-äöüßàáâãèéêìíîòóôõùúûñçąćęłńśźżčďěňřšťůžåæø]+/g, '') // Keep accented chars
-      .replace(/\-\-+/g, '-')         // Replace multiple - with single -
-      .replace(/^-+/, '')             // Trim - from start
-      .replace(/-+$/, '');            // Trim - from end
+      .replace(/\s+/g, '-')                              // whitespace → hyphen
+      .replace(/[\/\\?%*:|"<>#&=+\x00-\x1f\x7f]+/g, '')  // strip URL/filesystem-unsafe chars
+      .replace(/\-\-+/g, '-')                            // collapse multiple hyphens
+      .replace(/^-+/, '')                                // trim leading hyphens
+      .replace(/-+$/, '');                               // trim trailing hyphens
   };
 
   // YAML conversion function - outputs flat af.yml format
@@ -301,17 +319,25 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
   for (const [sectionKey, yamlSectionKey] of SECTIONS) {
     const title = tocTitle(yamlSectionKey);
 
-    // Filename: slugify fileTitles[sectionKey] (the full translated section title
-    // the translator entered at the top of each section card), falling back to
-    // the short TOC title if no file title was entered.
-    // Preface always overrides to index.html regardless.
+    // Filename resolution order:
+    //   1. Preface is always index.html (override).
+    //   2. If the translator entered a custom filename in the TOC filename field,
+    //      use it as-is (append .html if missing).
+    //   3. Otherwise slugify fileTitles[sectionKey] (the full translated section
+    //      title at the top of each section card).
+    //   4. Otherwise fall back to slugifying the short TOC title.
     let filename;
     if (sectionKey === 'index') {
       filename = 'index.html';
     } else {
-      const fileTitle = (fileTitles[sectionKey] || '').trim();
-      const base = fileTitle || title;
-      filename = base ? slugify(base) + '.html' : '';
+      const manualFilename = (byYamlKey[`${yamlSectionKey}|filename`] || '').trim();
+      if (manualFilename) {
+        filename = manualFilename.endsWith('.html') ? manualFilename : manualFilename + '.html';
+      } else {
+        const fileTitle = (fileTitles[sectionKey] || '').trim();
+        const base = fileTitle || title;
+        filename = base ? slugify(base) + '.html' : '';
+      }
     }
 
     if (title || filename) {
@@ -365,13 +391,37 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
   };
 
   // Smart download function
+  // Pre-export validation: scan the generated YAML for filenames that look
+  // broken (empty, just ".html", or all hyphens). Catches the case where a
+  // section is missing its translated title AND custom filename.
+  const validateYamlExport = (yamlContent) => {
+    const issues = [];
+    const lines = yamlContent.split('\n');
+    let currentSection = null;
+    for (const line of lines) {
+      const sectionMatch = line.match(/^    (\w+):\s*$/);
+      if (sectionMatch) {
+        currentSection = sectionMatch[1];
+        continue;
+      }
+      const filenameMatch = line.match(/^\s*filename:\s*"([^"]*)"/);
+      if (filenameMatch && currentSection) {
+        const fname = filenameMatch[1];
+        if (!fname || fname === '.html' || /^-+\.html$/.test(fname)) {
+          issues.push(`${currentSection}: "${fname}"`);
+        }
+      }
+    }
+    return issues;
+  };
+
   const downloadFile = (fileKey) => {
     const file = translationFiles[fileKey];
     const fileTranslations = translations[fileKey] || {};
-    
+
     // Determine if this is App Interface Terms
     const isAppInterface = fileKey === 'app-interface';
-    
+
     // Get title
     let titleToUse;
     if (fileTitles[fileKey] && fileTitles[fileKey].trim()) {
@@ -380,21 +430,34 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
       const firstTranslation = fileTranslations[file.content[0]?.id];
       titleToUse = firstTranslation || file.title;
     }
-    
+
     let content, filename, mimeType;
-    
+
     if (isAppInterface) {
       if (!languageCode) {
         alert('Please enter a language code (e.g., "af" for Afrikaans) before exporting the interface file.');
         return;
       }
       content = generateYAMLContent(fileKey);
+      // Validate filenames before download
+      const issues = validateYamlExport(content);
+      if (issues.length > 0) {
+        const proceed = confirm(
+          'Warning: the following sections have missing or malformed filenames:\n\n' +
+          issues.join('\n') +
+          '\n\nThis usually means the translated title is blank or only contains characters that were stripped during slug generation. ' +
+          'You can fix this by entering a value in the optional "Filename" field for each affected section.\n\n' +
+          'Download anyway?'
+        );
+        if (!proceed) return;
+      }
       filename = `${languageCode}.yml`;
       mimeType = 'text/yaml';
     } else {
       // Generate Markdown
       content = generateMarkdownContent(fileKey);
-      filename = titleToUse.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-') + '.md';
+      filename = slugify(titleToUse) + '.md';
+      if (filename === '.md') filename = fileKey + '.md'; // safety fallback
       mimeType = 'text/markdown';
     }
     
@@ -802,39 +865,54 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
                   <div className="border-2 border-green-300 rounded-lg overflow-hidden mt-6">
                     <div className="bg-green-200 p-3">
                       <h3 className="font-bold text-green-900">Table of Contents</h3>
-                      <p className="text-sm text-green-800">Translate the navigation menu titles - filenames will be auto-generated from your translations (e.g., "Die Zehn Gebote" → die-zehn-gebote.html)</p>
+                      <p className="text-sm text-green-800">Translate the navigation menu title. The filename field is optional — leave it blank to auto-generate from the title, or enter a custom slug (e.g., "die-zehn-gebote.html").</p>
                     </div>
                     <div className="bg-green-50 p-4 space-y-4">
-                      {file.content.filter(item => item.type === 'toc' && item.subKey === 'title').map((item) => {
-                        const hasValue = fileTranslations[item.id] && fileTranslations[item.id].trim().length > 0;
+                      {file.content.filter(item => item.type === 'toc' && item.subKey === 'title').map((titleItem) => {
+                        const filenameItem = file.content.find(i => i.type === 'toc' && i.yamlKey === titleItem.yamlKey && i.subKey === 'filename');
+                        const hasValue = fileTranslations[titleItem.id] && fileTranslations[titleItem.id].trim().length > 0;
                         return (
-                          <div key={item.id} className={'p-4 border rounded ' + (hasValue ? 'bg-white border-green-300' : 'bg-white border-gray-300')}>
+                          <div key={titleItem.id} className={'p-4 border rounded ' + (hasValue ? 'bg-white border-green-300' : 'bg-white border-gray-300')}>
                             <div className="text-xs inline-block px-2 py-1 rounded mb-2 font-medium bg-green-700 text-white">
-                              {item.yamlKey}
+                              {titleItem.yamlKey}
                             </div>
                             <div className="p-2 bg-gray-50 border rounded mb-2 italic text-gray-600">
-                              {item.text}
+                              {titleItem.text}
                             </div>
                             <div className="flex items-center gap-2 mb-2">
                               <input
                                 type="checkbox"
-                                id={`na-${item.id}`}
-                                checked={fileTranslations[item.id] === '[N/A]'}
-                                onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.checked ? '[N/A]' : '')}
+                                id={`na-${titleItem.id}`}
+                                checked={fileTranslations[titleItem.id] === '[N/A]'}
+                                onChange={(e) => handleTranslationChange(currentFile, titleItem.id, e.target.checked ? '[N/A]' : '')}
                                 className="rounded"
                               />
-                              <label htmlFor={`na-${item.id}`} className="text-sm text-gray-600">
+                              <label htmlFor={`na-${titleItem.id}`} className="text-sm text-gray-600">
                                 Mark as Not Applicable
                               </label>
                             </div>
                             <textarea
-                              value={fileTranslations[item.id] === '[N/A]' ? '' : (fileTranslations[item.id] || '')}
-                              onChange={(e) => handleTranslationChange(currentFile, item.id, e.target.value)}
-                              placeholder="Enter translation..."
+                              value={fileTranslations[titleItem.id] === '[N/A]' ? '' : (fileTranslations[titleItem.id] || '')}
+                              onChange={(e) => handleTranslationChange(currentFile, titleItem.id, e.target.value)}
+                              placeholder="Enter translated title..."
                               className="w-full p-2 border rounded"
                               rows={2}
-                              disabled={fileTranslations[item.id] === '[N/A]'}
+                              disabled={fileTranslations[titleItem.id] === '[N/A]'}
                             />
+                            {filenameItem && (
+                              <div className="mt-3 pt-3 border-t border-green-200">
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                  Filename (optional) — original: <span className="font-mono">{filenameItem.text}</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={fileTranslations[filenameItem.id] || ''}
+                                  onChange={(e) => handleTranslationChange(currentFile, filenameItem.id, e.target.value)}
+                                  placeholder="Leave blank to auto-generate from title"
+                                  className="w-full p-2 border rounded text-sm font-mono"
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
