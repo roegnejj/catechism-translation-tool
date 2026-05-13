@@ -390,6 +390,132 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
     return content.trim();
   };
 
+  // Generate a developer-facing reference document that maps translated
+  // filenames back to their original English filenames and section titles.
+  // Bundled with both the YAML download and the "Download All Completed" flow
+  // so devs integrating the translation into the app have a self-contained
+  // reference for what file is what.
+  const generateDevReadme = () => {
+    const code = (languageCode || 'translation').trim();
+    const today = new Date().toISOString().split('T')[0];
+    const appFile = translationFiles['app-interface'];
+    const appT = translations['app-interface'] || {};
+
+    // Build a yamlKey -> translated value lookup (mirrors the YAML exporter)
+    const byKey = {};
+    for (const item of appFile.content) {
+      if (item.yamlKey && appT[item.id]) {
+        const k = item.subKey ? `${item.yamlKey}|${item.subKey}` : item.yamlKey;
+        byKey[k] = appT[item.id];
+      }
+    }
+
+    // sectionKey, TOC yamlKey, original English markdown filename
+    const SECTION_MAP = [
+      ['index',                     'preface',                                'index.md'],
+      ['10-commandments',           'ten_commandments',                       '10-commandments.md'],
+      ['creed',                     'the_creed',                              'creed.md'],
+      ['lords-prayer',              'the_lords_prayer',                       'lords-prayer.md'],
+      ['sacrament-of-holy-baptism', 'the_sacrament_of_holy_baptism',          'sacrament-of-holy-baptism.md'],
+      ['confession',                'confession',                             'confession.md'],
+      ['sacrament-of-the-altar',    'the_sacrament_of_the_altar',             'sacrament-of-the-altar.md'],
+      ['daily-prayers',             'daily_prayers',                          'daily-prayers.md'],
+      ['table-of-duties',           'table_of_duties',                        'table-of-duties.md'],
+      ['questions-answers',         'christian_questions_with_their_answers', 'questions-answers.md'],
+      ['about',                     'about',                                  'about.md'],
+    ];
+
+    // Compute the translated .md filename using the same precedence the YAML
+    // exporter uses for .html filenames: manual filename > fileTitles slug >
+    // TOC title slug.
+    const translatedFilename = (sectionKey, yamlKey) => {
+      if (sectionKey === 'index') return 'index.md';
+      const manual = (byKey[`${yamlKey}|filename`] || '').trim();
+      if (manual) {
+        const base = manual.replace(/\.html?$/i, '');
+        return base + '.md';
+      }
+      const fileTitle = (fileTitles[sectionKey] || '').trim();
+      const tocTitle = (byKey[`${yamlKey}|title`] || '').trim();
+      const base = fileTitle || tocTitle;
+      return base ? slugify(base) + '.md' : '';
+    };
+
+    const bar = '='.repeat(80);
+    let out = '';
+    out += bar + '\n';
+    out += `CATECHISM TRANSLATION (${code.toUpperCase()}) — DEVELOPER REFERENCE\n`;
+    out += bar + '\n\n';
+    out += `Language code:   ${code}\n`;
+    out += `Generated:       ${today}\n`;
+    out += `Source:          Luther's Small Catechism Translation Tool\n\n`;
+    out += `This document maps translated filenames back to their original English\n`;
+    out += `filenames. Use it when integrating ${code}.yml and the translated .md\n`;
+    out += `content into the app codebase.\n\n`;
+
+    out += bar + '\n';
+    out += 'FILENAME MAPPING\n';
+    out += bar + '\n\n';
+    SECTION_MAP.forEach(([sectionKey, yamlKey, englishFilename], i) => {
+      const transFile  = translatedFilename(sectionKey, yamlKey) || '(missing)';
+      const sectionTitle = byKey[`${yamlKey}|title`] || '(no title)';
+      out += `${i + 1}. ${yamlKey}\n`;
+      out += `   English:    ${englishFilename}\n`;
+      out += `   Translated: ${transFile}\n`;
+      out += `   Title:      ${sectionTitle}\n\n`;
+    });
+
+    out += bar + '\n';
+    out += 'APP METADATA\n';
+    out += bar + '\n\n';
+    appFile.content.filter(i => i.type === 'metadata').forEach(item => {
+      const v = appT[item.id];
+      if (v && v !== '[N/A]') out += `  ${item.yamlKey.padEnd(20)} ${v.replace(/\n/g, ' ').trim()}\n`;
+    });
+    out += '\n';
+
+    out += bar + '\n';
+    out += 'INTERFACE TERMS\n';
+    out += bar + '\n\n';
+    appFile.content.filter(i => i.type === 'interface').forEach(item => {
+      const v = appT[item.id];
+      if (v && v !== '[N/A]') out += `  ${item.yamlKey.padEnd(20)} ${v}\n`;
+    });
+    out += '\n';
+
+    out += bar + '\n';
+    out += 'NOTES\n';
+    out += bar + '\n\n';
+    out += `- Preface always uses "index.md" / "index.html" regardless of language.\n`;
+    out += `- Filenames in ${code}.yml use .html (served at runtime). The source\n`;
+    out += `  markdown files use .md with the same slug.\n`;
+    out += `- ${code}.yml is the source of truth for filename mapping and interface\n`;
+    out += `  terms. Place in config/locales/ in the app codebase.\n`;
+    out += `- If routing doesn't accept non-ASCII URL paths, URL-encode the\n`;
+    out += `  translated filenames or arrange a redirect layer.\n\n`;
+
+    out += bar + '\n';
+    out += 'SUPPORT\n';
+    out += bar + '\n\n';
+    out += `Tool source: https://github.com/roegnejj/catechism-translation-tool\n`;
+    out += `Tool URL:    https://roegnejj.github.io/catechism-translation-tool/\n`;
+    out += `Contact:     Jeremy Roegner — jeremy.roegner@cph.org\n`;
+
+    return out;
+  };
+
+  const downloadDevReadme = () => {
+    const content = generateDevReadme();
+    const code = (languageCode || 'translation').trim();
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `README-FOR-DEVS-${code}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Smart download function
   // Pre-export validation: scan the generated YAML for filenames that look
   // broken (empty, just ".html", or all hyphens). Catches the case where a
@@ -415,7 +541,8 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
     return issues;
   };
 
-  const downloadFile = (fileKey) => {
+  const downloadFile = (fileKey, options = {}) => {
+    const { skipDevReadme = false } = options;
     const file = translationFiles[fileKey];
     const fileTranslations = translations[fileKey] || {};
 
@@ -468,14 +595,24 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+
+    // After a standalone YAML download, also emit the dev README so the
+    // mapping reference travels with the language config. Skipped when called
+    // from downloadAllCompleted to avoid emitting two README copies.
+    if (isAppInterface && !skipDevReadme) {
+      setTimeout(downloadDevReadme, 200);
+    }
   };
 
   const downloadAllCompleted = () => {
-    Object.keys(translationFiles).forEach((fileKey, index) => {
+    const fileKeys = Object.keys(translationFiles);
+    fileKeys.forEach((fileKey, index) => {
       if (isFileComplete(fileKey)) {
-        setTimeout(() => downloadFile(fileKey), index * 200);
+        setTimeout(() => downloadFile(fileKey, { skipDevReadme: true }), index * 200);
       }
     });
+    // Append the dev README once at the end of the queue.
+    setTimeout(downloadDevReadme, fileKeys.length * 200);
   };
 
   // Test mode functions
