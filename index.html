@@ -70,6 +70,51 @@ const CPHLogo = ({ size = 48 }) => (
   </svg>
 );
 
+// ── Supported language configuration — single source of truth ────────────────
+// To add a new language: append its BCP 47 / ISO 639-1 code here. That's it.
+// LANG_CODE_MAP and ALL_LANGUAGES inside generateYAMLContent are both derived
+// from this list automatically via Intl.DisplayNames.
+const SUPPORTED_LANGUAGE_CODES = [
+  'af', 'en', 'zh-hans', 'zh-hant', 'es', 'fi', 'de', 'ja', 'ti', 'pt', 'th',
+];
+
+// Override table for YAML keys where our convention differs from Intl's output.
+const YAML_KEY_OVERRIDES = {
+  'zh-hans': 'Chinese_Hans',
+  'zh-hant': 'Chinese_Hant',
+  'ti':      'Tigrigna',   // Intl returns 'Tigrinya'; preserve existing YAML key
+};
+
+// Override table for native display names. Preserves the exact strings that
+// existing exported YAMLs already contain. To accept Intl's version for a
+// language (e.g. lowercase 'español' instead of 'Español'), remove its entry.
+const NATIVE_NAME_OVERRIDES = {
+  'es':      'Español',      // Intl: 'español'    — capitalized per prior convention
+  'fi':      'Suomi',        // Intl: 'suomi'       — capitalized per prior convention
+  'pt':      'Português',    // Intl: 'português'   — capitalized per prior convention
+  'zh-hans': '中国简体',       // Intl: '中文（简体）'  — informal shorthand per prior convention
+  'zh-hant': '中國傳統',       // Intl: '中文（繁體）'  — informal shorthand per prior convention
+};
+
+// Returns the YAML key for a language code (English name, title-cased, or override).
+function isoCodeToYamlKey(code) {
+  if (YAML_KEY_OVERRIDES[code]) return YAML_KEY_OVERRIDES[code];
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language', fallback: 'code' }).of(code) || code;
+  } catch (e) { return code; }
+}
+
+// Returns the language's own native-script name (e.g. 'de' → 'Deutsch').
+// Checks NATIVE_NAME_OVERRIDES first so existing YAML exports stay bit-identical.
+function isoCodeToNativeName(code) {
+  if (NATIVE_NAME_OVERRIDES[code]) return NATIVE_NAME_OVERRIDES[code];
+  // Intl.DisplayNames requires proper BCP 47 casing for subtag variants.
+  const bcp47 = code === 'zh-hans' ? 'zh-Hans' : code === 'zh-hant' ? 'zh-Hant' : code;
+  try {
+    return new Intl.DisplayNames([bcp47], { type: 'language', fallback: 'code' }).of(bcp47) || code;
+  } catch (e) { return code; }
+}
+
 const TranslationWorkstation = () => {
   const [currentFile, setCurrentFile] = useState(null);
   const [translations, setTranslations] = useState({});
@@ -207,22 +252,12 @@ const generateYAMLContent = (fileKey) => {
     return `"${escaped}"`;
   };
 
-  // ── language code → [YAML key, native name fallback] ─────────────────────────
-  // Used to output the current language's name entry at the top of the file.
-  // If a translatable entry exists in the data (e.g. yamlKey: "Afrikaans"), it
-  // takes precedence; otherwise the fallback native name is used.
-  const LANG_CODE_MAP = {
-    'af':      ['Afrikaans',    'Afrikaans'],
-    'en':      ['English',      'English'],
-    'zh-hans': ['Chinese_Hans', '中国简体'],
-    'zh-hant': ['Chinese_Hant', '中國傳統'],
-    'es':      ['Spanish',      'Español'],
-    'fi':      ['Finnish',      'Suomi'],
-    'de':      ['German',       'Deutsch'],
-    'ja':      ['Japanese',     '日本語'],
-    'ti':      ['Tigrigna',     'ትግርኛ'],
-    'pt':      ['Portuguese',   'Português'],
-  };
+  // ── language code → [YAML key, native name] ──────────────────────────────────
+  // Derived from SUPPORTED_LANGUAGE_CODES (module-level). To add a language,
+  // append its code there — no changes needed here.
+  const LANG_CODE_MAP = Object.fromEntries(
+    SUPPORTED_LANGUAGE_CODES.map(c => [c, [isoCodeToYamlKey(c), isoCodeToNativeName(c)]])
+  );
 
   // ── catechism sections in output order ───────────────────────────────────────
   // [translationFiles key, YAML contents key]
@@ -270,25 +305,15 @@ const generateYAMLContent = (fileKey) => {
   let yaml = `${code}:\n`;
 
 // 1. Language names — all known languages, current language first.
-// Native names are hardcoded as fallbacks so output is always correct
-// even if the translator hasn't entered them in the tool.
-const ALL_LANGUAGES = [
-  ['Afrikaans',    'Afrikaans'],
-  ['English',      'English'],
-  ['Chinese_Hans', '中国简体'],
-  ['Chinese_Hant', '中國傳統'],
-  ['Spanish',      'Español'],
-  ['Finnish',      'Suomi'],
-  ['German',       'Deutsch'],
-  ['Japanese',     '日本語'],
-  ['Tigrigna',     'ትግርኛ'],
-  ['Portuguese',   'Português'],
-];
+// Derived from SUPPORTED_LANGUAGE_CODES; native names via Intl.DisplayNames.
+const ALL_LANGUAGES = SUPPORTED_LANGUAGE_CODES.map(c => [isoCodeToYamlKey(c), isoCodeToNativeName(c)]);
 
-const [currentLangYamlKey] = LANG_CODE_MAP[code.toLowerCase()] || [];
+const [currentLangYamlKey, currentLangNativeName] = LANG_CODE_MAP[code.toLowerCase()] || [];
 
 if (currentLangYamlKey) {
-  yaml += `  ${currentLangYamlKey}: ${q(byYamlKey[currentLangYamlKey] || currentLangYamlKey)}\n`;
+  // Prefer the translator-entered value; fall back to the native-name from
+  // LANG_CODE_MAP; only fall back to the bare YAML key as a last resort.
+  yaml += `  ${currentLangYamlKey}: ${q(byYamlKey[currentLangYamlKey] || currentLangNativeName || currentLangYamlKey)}\n`;
 }
 for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
   if (yamlKey !== currentLangYamlKey) {
@@ -425,20 +450,21 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
       ['about',                     'about',                                  'about.md'],
     ];
 
-    // Compute the translated .md filename using the same precedence the YAML
-    // exporter uses for .html filenames: manual filename > fileTitles slug >
-    // TOC title slug.
+    // Compute the translated .md filename matching what downloadFile() will
+    // actually produce: index for preface, otherwise "{slug} ({english}).md".
     const translatedFilename = (sectionKey, yamlKey) => {
       if (sectionKey === 'index') return 'index.md';
       const manual = (byKey[`${yamlKey}|filename`] || '').trim();
+      let slug;
       if (manual) {
-        const base = manual.replace(/\.html?$/i, '');
-        return base + '.md';
+        slug = manual.replace(/\.html?$/i, '');
+      } else {
+        const fileTitle = (fileTitles[sectionKey] || '').trim();
+        const tocTitle = (byKey[`${yamlKey}|title`] || '').trim();
+        const base = fileTitle || tocTitle;
+        slug = base ? slugify(base) : '';
       }
-      const fileTitle = (fileTitles[sectionKey] || '').trim();
-      const tocTitle = (byKey[`${yamlKey}|title`] || '').trim();
-      const base = fileTitle || tocTitle;
-      return base ? slugify(base) + '.md' : '';
+      return slug ? `${slug} (${sectionKey}).md` : `${sectionKey}.md`;
     };
 
     const bar = '='.repeat(80);
@@ -583,8 +609,20 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
     } else {
       // Generate Markdown
       content = generateMarkdownContent(fileKey);
-      filename = slugify(titleToUse) + '.md';
-      if (filename === '.md') filename = fileKey + '.md'; // safety fallback
+      if (fileKey === 'index') {
+        // Preface always exports as index.md to match the YAML's index.html
+        // override. Without this, the .md filename would be slugified from the
+        // translated preface title, which is inconsistent with runtime routing.
+        filename = 'index.md';
+      } else {
+        // Include the original English file key in parentheses so developers
+        // integrating the translation can match files at a glance during
+        // handoff (Matt Kobs' feedback after the Thai integration).
+        const slug = slugify(titleToUse);
+        filename = slug
+          ? `${slug} (${fileKey}).md`
+          : `${fileKey}.md`; // fallback if slugify produced nothing
+      }
       mimeType = 'text/markdown';
     }
     
