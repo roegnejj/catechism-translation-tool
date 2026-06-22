@@ -21,7 +21,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-    <script src="translations-data.js?v=2"></script>
+    <script src="translations-data.js?v=3"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -342,6 +342,7 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
   if (metadataItems.length > 0) {
     yaml += `  metadata:\n`;
     for (const item of metadataItems) {
+      if (fileTranslations[item.id] === '[N/A]') continue;
       yaml += `    ${item.yamlKey}: ${q(fileTranslations[item.id])}\n`;
     }
   }
@@ -1004,7 +1005,7 @@ for (const [yamlKey, nativeName] of ALL_LANGUAGES) {
                   <div className="border-2 border-yellow-300 rounded-lg overflow-hidden mt-6">
                     <div className="bg-yellow-200 p-3">
                       <h3 className="font-bold text-yellow-900">Metadata</h3>
-                      <p className="text-sm text-yellow-800">App headers and copyright information</p>
+                      <p className="text-sm text-yellow-800">App headers, copyright, and optional translation attribution. Mark any field as Not Applicable to omit it from the YAML.</p>
                     </div>
                     <div className="bg-yellow-50 p-4 space-y-4">
                       {file.content.filter(item => item.type === 'metadata').map((item) => {
