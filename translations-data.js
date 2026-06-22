@@ -424,7 +424,8 @@ const translationFiles = {
       {"id": "metadata_header1", "text": "Luther's Small Catechism", "type": "metadata", "yamlKey": "header1"},
       {"id": "metadata_header2", "text": "by Dr. Martin Luther", "type": "metadata", "yamlKey": "header2"},
       {"id": "metadata_toc_name", "text": "Table of Contents", "type": "metadata", "yamlKey": "toc_name"},
-      {"id": "metadata_copyright", "text": "From Luther's Small Catechism © 1986 Concordia Publishing House, cph.org", "type": "metadata", "yamlKey": "copyright"},
+      {"id": "metadata_copyright", "text": "From Luther's Small Catechism © 1986 Concordia Publishing House, cph.org", "type": "metadata", "yamlKey": "copyright_html"},
+      {"id": "metadata_translation_attribution", "text": "Translation provided courtesy of [Organization Name], [URL]", "type": "metadata", "yamlKey": "translation_attribution"},
       
       // SECTION 3: Table of Contents (nested under contents key with title + filename)
       {"id": "toc_preface_title", "text": "Luther's Preface", "type": "toc", "yamlKey": "preface", "subKey": "title"},
